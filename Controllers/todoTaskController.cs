@@ -3,9 +3,7 @@
 namespace myAPI.Controllers
 
 {
-    
-    [ApiController]
-    public class todotodoTaskController : ControllerBase
+    public class todoTaskController : ControllerBase
     {
         public static List<Task> Tasks = new List<Task>();
         public static List<TodoAssignee> Assignees = new List<TodoAssignee>();
@@ -13,141 +11,203 @@ namespace myAPI.Controllers
         [HttpPost("/api/tasks")]
         public IActionResult Create([FromBody] TaskDto taskDto)
         {
-            var task = new Task
+            try
             {
-                Id = Tasks.Count + 1,
-                Title = taskDto.Title,
-                Description = taskDto.Description,
-                IsCompleted = taskDto.IsCompleted
-            };
+                if (taskDto == null)
+                {
+                    return BadRequest("Task details are required.");
+                }
 
-            Tasks.Add(task);
-            return Ok(task);
+                var newTask = new Task
+                {
+                    Id = Tasks.Count + 1,
+                    Title = taskDto.Title,
+                    Description = taskDto.Description,
+                    Status = TaskStatus.complete
+                };
+
+                Tasks.Add(newTask);
+                return CreatedAtAction(nameof(GetById), new { id = newTask.Id }, newTask);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
+
 
         [HttpGet("/api/tasks")]
         public IActionResult GetAll()
         {
-            var tasksWithAssignees = Tasks.Select(task =>
+            try
             {
-                var assignee = Assignees.FirstOrDefault(a => a.TodoId == task.Id);
-                return new
+                var taskList = Tasks.Select(task => new
                 {
-                    TaskId = task.Id,
-                    TaskTitle = task.Title,
-                    TaskDescription = task.Description,
-                    IsCompleted = task.IsCompleted,
-                    AssigneeName = assignee?.PersonName
-                };
-            }).ToList();
+                    task.Id,
+                    task.Title,
+                    task.Description,
+                    task.Status,
+                    AssigneeName = Assignees.FirstOrDefault(a => a.TodoId == task.Id)?.PersonName
+                }).ToList();
 
-            return Ok(tasksWithAssignees);
+                return Ok(taskList);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
+
 
         [HttpGet("/api/tasks/{id}")]
         public IActionResult GetById(int id)
         {
-            var task = Tasks.FirstOrDefault(x => x.Id == id);
-            if (task == null)
+            try
             {
-                return NotFound();
+                var task = Tasks.FirstOrDefault(t => t.Id == id);
+
+                if (task == null)
+                {
+                    return NotFound($"Task with ID {id} not found.");
+                }
+
+                var assignee = Assignees.FirstOrDefault(a => a.TodoId == id);
+                return Ok(new
+                {
+                    task.Id,
+                    task.Title,
+                    task.Description,
+                    task.Status,
+                    AssigneeName = assignee?.PersonName
+                });
             }
-
-            var assignee = Assignees.FirstOrDefault(a => a.TodoId == id);
-            var taskWithAssignee = new
+            catch (Exception ex)
             {
-                TaskId = task.Id,
-                TaskTitle = task.Title,
-                TaskDescription = task.Description,
-                IsCompleted = task.IsCompleted,
-                AssigneeName = assignee?.PersonName
-            };
-
-            return Ok(taskWithAssignee);
+                return BadRequest(ex.Message);
+            }
         }
+
 
         [HttpPut("/api/tasks/{id}")]
         public IActionResult Update(int id, [FromBody] TaskDto taskDto)
         {
-            var existingTask = Tasks.FirstOrDefault(x => x.Id == id);
-
-            if (existingTask == null)
+            try
             {
-                return NotFound();
+                var task = Tasks.FirstOrDefault(t => t.Id == id);
+
+                if (task == null)
+                {
+                    return NotFound($"Task with ID {id} not found.");
+                }
+
+                task.Title = taskDto.Title;
+                task.Description = taskDto.Description;
+                task.Status = taskDto.Status;
+
+                return Ok("Task updated successfully.");
             }
-
-            existingTask.Title = taskDto.Title;
-            existingTask.Description = taskDto.Description;
-            existingTask.IsCompleted = taskDto.IsCompleted;
-
-            return Ok("Task updated successfully");
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
+
 
         [HttpDelete("/api/tasks/{id}")]
         public IActionResult Delete(int id)
         {
-            var task = Tasks.FirstOrDefault(x => x.Id == id);
-            if (task == null)
+            try
             {
-                return NotFound();
-            }
+                var task = Tasks.FirstOrDefault(t => t.Id == id);
 
-            Tasks.Remove(task);
-            Assignees.RemoveAll(a => a.TodoId == id); // Remove related assignees
-            return Ok("Task deleted successfully");
+                if (task == null)
+                {
+                    return NotFound($"Task with ID {id} not found.");
+                }
+
+                Tasks.Remove(task);
+                Assignees.RemoveAll(a => a.TodoId == id);
+
+                return Ok("Task deleted successfully.");
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
+
 
         [HttpPost("/api/tasks/assign")]
         public IActionResult AssignTask([FromBody] TodoAssigneeDto assigneeDto)
         {
-            var task = Tasks.FirstOrDefault(x => x.Id == assigneeDto.TodoId);
-            if (task == null)
+            try
             {
-                return NotFound("Task not found.");
+                if (assigneeDto == null)
+                {
+                    return BadRequest("Assignee details are required.");
+                }
+
+                var task = Tasks.FirstOrDefault(t => t.Id == assigneeDto.TodoId);
+
+                if (task == null)
+                {
+                    return NotFound($"Task with ID {assigneeDto.TodoId} not found.");
+                }
+
+                Assignees.RemoveAll(a => a.TodoId == assigneeDto.TodoId);
+
+                Assignees.Add(new TodoAssignee
+                {
+                    TodoId = assigneeDto.TodoId,
+                    PersonId = assigneeDto.PersonId,
+                    PersonName = assigneeDto.PersonName
+                });
+
+                return Ok("Task assigned successfully.");
             }
-
-            var assignee = new TodoAssignee
+            catch (Exception ex)
             {
-                TodoId = assigneeDto.TodoId,
-                TodoName = task.Title,
-                PersonId = assigneeDto.PersonId,
-                PersonName = assigneeDto.PersonName
-            };
-
-            Assignees.RemoveAll(a => a.TodoId == assigneeDto.TodoId); // Ensure only one assignee per task
-            Assignees.Add(assignee);
-
-            return Ok("Task assigned successfully");
+                return BadRequest(ex.Message);
+            }
         }
     }
+}
 
-    public class TaskDto
-    {
-        public string Title { get; set; }
-        public string Description { get; set; }
-        public bool IsCompleted { get; set; }
-    }
+public class TaskDto
+{
+    public string Title { get; set; }
+    public string Description { get; set; }
 
-    public class Task
-    {
-        public int Id { get; set; }
-        public string Title { get; set; }
-        public string Description { get; set; }
-        public bool IsCompleted { get; set; }
-    }
+    public TaskStatus Status { get; set; }
+}
 
-    public class TodoAssigneeDto
-    {
-        public int TodoId { get; set; }
-        public string PersonId { get; set; }
-        public string PersonName { get; set; }
-    }
+public class Task
+{
+    public int Id { get; set; }
+    public string Title { get; set; }
+    public string Description { get; set; }
 
-    public class TodoAssignee
-    {
-        public int TodoId { get; set; }
-        public string TodoName { get; set; }
-        public string PersonId { get; set; }
-        public string PersonName { get; set; }
-    }
+    public TaskStatus Status { get; set; }
+}
+
+public class TodoAssigneeDto
+{
+    public int TodoId { get; set; }
+    public string PersonId { get; set; }
+    public string PersonName { get; set; }
+}
+
+public class TodoAssignee
+{
+    public int TodoId { get; set; }
+    public string TodoName { get; set; }
+    public string PersonId { get; set; }
+    public string PersonName { get; set; }
+}
+
+public enum TaskStatus
+{
+    complete,
+    pending,
+    inprogress,
 }
